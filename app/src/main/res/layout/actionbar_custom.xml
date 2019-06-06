@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingTop="5dip">
+
+    <ImageView
+        android:id="@+id/imageView1"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_centerInParent="true"
+        android:layout_alignParentLeft="true"
+        android:src="@drawable/bfree" />
+
+    <LinearLayout android:layout_width="wrap_content"
+                  android:layout_height="match_parent"
+                  android:layout_weight="5"
+        />
+
+    <ImageView
+        android:id="@+id/sortButton"
+        android:layout_centerInParent="true"
+        android:layout_alignParentRight="true"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:src="@drawable/down" />
+    <LinearLayout android:layout_width="wrap_content"
+                  android:layout_height="3dip"
+                  android:layout_weight="2"
+        />
+
+    <ImageView
+        android:id="@+id/searchButton"
+        android:layout_centerInParent="true"
+        android:layout_alignParentRight="true"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:src="@drawable/search" />
+
+    <LinearLayout android:layout_width="wrap_content"
+                  android:layout_height="3dip"
+                  android:layout_weight="2"
+        />
+
+    <ImageView
+        android:id="@+id/resetSearch"
+        android:layout_centerInParent="true"
+        android:layout_alignParentRight="true"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:src="@drawable/reset_search_grey" />
+
+</LinearLayout>
