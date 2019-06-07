@@ -25,7 +25,6 @@ class BFreeDB {
   final static byte COPDATE = 4;
   final static byte COPYRIGHT = 5;
   final static byte TEXT = 6;
-
   final static byte NO_LINKS = 7;
 
   void load(MainActivity a) {
@@ -204,17 +203,27 @@ class BFreeDB {
   void addLink(Node link) {
     // <addlink><id>12345</id><link><type><Chords></type><file>Blah</file></addlink>
     String id = XMLHelper.getTagValue(link,"id");
+    Node link_to_add = XMLHelper.getTag(link, "link");
     for (int i=0; i<song_data.size(); i++) {
       String[] ss = song_data.get(i).split("\t");
       if (ss[OFFICE_NO].equals(id)) {
+        String new_link_type = XMLHelper.getTagValue(link_to_add,"type");
+        String new_link_file = XMLHelper.getTagValue(link_to_add,"file");
         int no_links = Integer.parseInt(ss[NO_LINKS]);
-        ss[NO_LINKS]=String.valueOf(no_links + 1);
-        StringBuilder sss = new StringBuilder();
-        for (String sj : ss) sss.append(sj).append("\t");
-        sss.append(XMLHelper.getTagValue(link,"type")).append("\t");
-        sss.append(XMLHelper.getTagValue(link, "file")).append("\t");
-        song_data.set(i, sss.toString());
-        i=song_data.size();
+        StringBuilder updated_entry = new StringBuilder();
+        for (int j=0; j<=NO_LINKS; j++) updated_entry.append(ss[j]).append("\t");
+        int new_links=0;
+        for (int j=NO_LINKS+1; j<NO_LINKS+1+(no_links * 2); j+=2){
+          if (!ss[j].equals(new_link_type)) {
+            updated_entry.append(ss[j]).append("\t").append(ss[j+1]).append("\t");
+            new_links++;
+          }
+        }
+        new_links++;
+        ss[NO_LINKS]=String.valueOf(new_links);
+        updated_entry.append(new_link_type).append("\t").append(new_link_file).append("t");
+        song_data.set(i, updated_entry.toString());
+        break;
       }
     }
   }

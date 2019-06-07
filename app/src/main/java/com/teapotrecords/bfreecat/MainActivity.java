@@ -58,12 +58,12 @@ public class MainActivity extends AppCompatActivity {
   static final byte NET_TASK_CAT_VERSION = 1;
   static final byte NET_TASK_DO_UPDATE = 2;
 
-  String appVersion = "0.10";
+  String appVersion = "0.11";
 
   byte current_sort = TITLE_AZ;
   byte next_sort = TITLE_AZ;
 
-  String latestAndroidVersion = "0.9"; //
+  String latestAndroidVersion = "0.9"; // Overwritten by lookup
   String latestCatVersion= "A0";
   ProgressDialog progressDialog;
   BFreeDB db;
