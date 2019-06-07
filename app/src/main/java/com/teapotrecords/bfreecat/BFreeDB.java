@@ -11,24 +11,24 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class BFreeDB {
+class BFreeDB {
 
   String catVersion = "A0";
-  ArrayList<String> list_ids = new ArrayList<String>();
-  ArrayList<String> list_names = new ArrayList<String>();
-  ArrayList<String> song_data = new ArrayList<String>();
-  public HashMap<String,Integer> officeToIndex = new HashMap<>();
-  public final static byte TITLE = 0;
-  public final static byte ALT_TITLE = 1;
-  public final static byte OFFICE_NO = 2;
-  public final static byte AUTHOR = 3;
-  public final static byte COPDATE = 4;
-  public final static byte COPYRIGHT = 5;
-  public final static byte TEXT = 6;
+  private ArrayList<String> list_ids = new ArrayList<>();
+  private ArrayList<String> list_names = new ArrayList<>();
+  ArrayList<String> song_data = new ArrayList<>();
+  HashMap<String,Integer> officeToIndex = new HashMap<>();
+  final static byte TITLE = 0;
+  final static byte ALT_TITLE = 1;
+  final static byte OFFICE_NO = 2;
+  final static byte AUTHOR = 3;
+  final static byte COPDATE = 4;
+  final static byte COPYRIGHT = 5;
+  final static byte TEXT = 6;
 
   final static byte NO_LINKS = 7;
 
-  public void load(MainActivity a) {
+  void load(MainActivity a) {
     try {
       BufferedReader br = new BufferedReader(new FileReader(new File(a.getFilesDir(), "db.txt")));
       catVersion=br.readLine();
@@ -50,7 +50,7 @@ public class BFreeDB {
     } catch (Exception e) { e.printStackTrace(); }
   }
 
-  public void save(MainActivity a) {
+  void save(MainActivity a) {
     try {
       PrintWriter PW = new PrintWriter(new FileWriter(new File(a.getFilesDir(), "db.txt")));
       PW.println(catVersion);
@@ -66,7 +66,7 @@ public class BFreeDB {
 
   }
 
-  public static void dealWithLinks(ArrayList<String> files, ArrayList<Byte> types, Node songnode) {
+  private static void dealWithLinks(ArrayList<String> files, ArrayList<Byte> types, Node songnode) {
     Node links = XMLHelper.getTag(songnode, "links");
     int no_links = XMLHelper.countChildren(links, "link");
     for (int j = 0; j < no_links; j++) {
@@ -81,7 +81,7 @@ public class BFreeDB {
       }
     }
   }
-  public static void addDownloads(ArrayList<String> files, ArrayList<Byte> types, Element doc) {
+  static void addDownloads(ArrayList<String> files, ArrayList<Byte> types, Element doc) {
     types.clear();
     files.clear();
     int getfile_count = XMLHelper.countChildren(doc, "getfile");
@@ -108,7 +108,7 @@ public class BFreeDB {
     }
   }
 
-  public void addSongToDB(Node addsong) {
+  void addSongToDB(Node addsong) {
     StringBuilder newdata = new StringBuilder();
     Node song = XMLHelper.getTag(addsong,"song");
     String new_title = XMLHelper.getTagValue(song, "title");
@@ -126,11 +126,11 @@ public class BFreeDB {
     Node links_to_add = XMLHelper.getTag(song, "links");
     int no_links = XMLHelper.countChildren(links_to_add, "link");
 
-    newdata.append(String.valueOf(no_links)+"\t");
+    newdata.append(no_links).append("\t");
     for (int i = 0; i < no_links; i++) {
       Node link_to_add = XMLHelper.getChildNo(links_to_add, "link", i);
-      newdata.append(XMLHelper.getTagValue(link_to_add, "type")+"\t");
-      newdata.append(XMLHelper.getTagValue(link_to_add, "file") + "\t");
+      newdata.append(XMLHelper.getTagValue(link_to_add, "type")).append("\t");
+      newdata.append(XMLHelper.getTagValue(link_to_add, "file")).append("\t");
     }
     boolean found=false;
     for (int i=0; i<song_data.size(); i++) {
@@ -146,7 +146,7 @@ public class BFreeDB {
     if (!found) song_data.add(newdata.toString());
   }
 
-  public void removeSong(Node removesong) {
+  void removeSong(Node removesong) {
     //  <removesong><id>1079273</id></removesong>
     String id = XMLHelper.getTagValue(removesong, "id");
     for (int i=0; i<song_data.size(); i++) {
@@ -157,7 +157,7 @@ public class BFreeDB {
     }
   }
 
-  public void updateSong(Node update) {
+  void updateSong(Node update) {
     // Recreate all data - remove/add with officeno.
     removeSong(update);
     addSongToDB(update);
@@ -165,7 +165,7 @@ public class BFreeDB {
 
 
 
-  public void renameID(Node renameid) {
+  void renameID(Node renameid) {
     // <renameid><from>4222082 </from><to>4222082</to></renameid>
 
     // First find the actual record.
@@ -176,7 +176,7 @@ public class BFreeDB {
       if (s[OFFICE_NO].equals(fromid)) {
         s[OFFICE_NO]=toid;
         StringBuilder ss = new StringBuilder();
-        for (int j=0; j<s.length; j++) ss.append(s[j]+"\t");
+        for (String sj : s) ss.append(sj).append("\t");
         song_data.set(i,ss.toString());
         i=song_data.size();
       }
@@ -195,13 +195,13 @@ public class BFreeDB {
       }
       if (change) {
         StringBuilder sss = new StringBuilder();
-        for (int j=0; j<ss.length; j++) sss.append(ss[j]+"\t");
+        for (String sj : ss) sss.append(sj).append("\t");
         list_ids.set(i,sss.toString());
       }
     }
   }
 
-  public void addLink(Node link) {
+  void addLink(Node link) {
     // <addlink><id>12345</id><link><type><Chords></type><file>Blah</file></addlink>
     String id = XMLHelper.getTagValue(link,"id");
     for (int i=0; i<song_data.size(); i++) {
@@ -210,16 +210,16 @@ public class BFreeDB {
         int no_links = Integer.parseInt(ss[NO_LINKS]);
         ss[NO_LINKS]=String.valueOf(no_links + 1);
         StringBuilder sss = new StringBuilder();
-        for (int j=0; j<ss.length; j++) sss.append(ss[j]+"\t");
-        sss.append(XMLHelper.getTagValue(link,"type")+"\t");
-        sss.append(XMLHelper.getTagValue(link, "file")+"\t");
+        for (String sj : ss) sss.append(sj).append("\t");
+        sss.append(XMLHelper.getTagValue(link,"type")).append("\t");
+        sss.append(XMLHelper.getTagValue(link, "file")).append("\t");
         song_data.set(i, sss.toString());
         i=song_data.size();
       }
     }
   }
 
-  public void removeLink(Node link) {
+  void removeLink(Node link) {
     // Not used. But:   <removelink><id>12345</id><type>Chords</type><file>Blah</file></removelink>
     String id = XMLHelper.getTagValue(link,"id");
     String type = XMLHelper.getTagValue(link, "type");
@@ -234,8 +234,8 @@ public class BFreeDB {
             ss[NO_LINKS + 2 + (2 * j)] = null;
             ss[NO_LINKS] = String.valueOf(no_links - 1);
             StringBuilder sss = new StringBuilder();
-            for (int k = 0; k < ss.length; k++) {
-              if (ss[k] != null) sss.append(ss[k] + "\t");
+            for (String sk : ss) {
+              if (sk != null) sss.append(sk).append("\t");
             }
             song_data.set(i, sss.toString());
             j = no_links;
@@ -248,14 +248,15 @@ public class BFreeDB {
 
   //-------- List Support -----------//
 
-  public void createList(Node createlist) {
+  void createList(Node createlist) {
     //   <createlist>Popular Songs</createlist>
 
     String newlist = createlist.getTextContent();
     list_names.add(newlist);
-    list_ids.add(new String());}
+    list_ids.add("");
+  }
 
-  public void removeList(Node createlist) {
+  void removeList(Node createlist) {
     // <removelist>Update 2004</removelist>
     String dellist = createlist.getTextContent();
     for (int i=0; i<list_names.size(); i++) {
@@ -267,7 +268,7 @@ public class BFreeDB {
     }
   }
 
-  public void renameList(Node createlist) {
+  void renameList(Node createlist) {
     // Not used in any updates...
     String fromlist = XMLHelper.getTagValue(createlist,"from");
     String tolist = XMLHelper.getTagValue(createlist, "to");
@@ -279,9 +280,10 @@ public class BFreeDB {
     }
   }
 
-  public void addSongToList(Node addtolist) {
+  void addSongToList(Node addtolist) {
     //<addsongtolist><id>18723</id><list>Popular Songs</list></addsongtolist>
-    String id = XMLHelper.getTagValue(addtolist, "id");
+    // Looks odd = recheck if we implement lists on android.
+    //String id = XMLHelper.getTagValue(addtolist, "id");
     String list = XMLHelper.getTagValue(addtolist, "list");
     for (int i=0; i<list_names.size(); i++) {
       if (list_names.get(i).equals(list)) {
@@ -292,7 +294,7 @@ public class BFreeDB {
     }
   }
 
-  public void removeSongFromList(Node addtolist) {
+  void removeSongFromList(Node addtolist) {
     //<addsongtolist><id>18723</id><list>Popular Songs</list></addsongtolist>
     String id = XMLHelper.getTagValue(addtolist, "id");
     String list = XMLHelper.getTagValue(addtolist, "list");
@@ -306,7 +308,7 @@ public class BFreeDB {
           }
         }
         StringBuilder sss = new StringBuilder();
-        for (int j = 0; j < s.length; j++) if (s[j] != null) sss.append(s[j] + "\t");
+        for (String sj : s) if (sj != null) sss.append(sj).append("\t");
         list_ids.set(i, sss.toString());
         i = list_names.size();
       }

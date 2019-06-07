@@ -1,16 +1,15 @@
 package com.teapotrecords.bfreecat;
 
+import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
-import android.content.DialogInterface;
+import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AlertDialog;
@@ -36,6 +35,7 @@ import org.w3c.dom.Node;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
@@ -46,7 +46,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
 public class MainActivity extends AppCompatActivity {
-  static final String PREFS_NAME = "BfreeCatalogue";
+  //static final String PREFS_NAME = "BfreeCatalogue";
   static final String rootWeb = "http://www.teapotrecords.co.uk/bfree";
   static final String versionFile = rootWeb+"/XML/version.xml";
   static final byte TITLE_AZ = 0;
@@ -54,7 +54,9 @@ public class MainActivity extends AppCompatActivity {
   static final byte AUTHOR_AZ = 2;
   static final byte AUTHOR_ZA = 3;
   static final byte COPDATE_AZ = 4;
-  static final byte COPDATE_ZA = 5;
+  //static final byte COPDATE_ZA = 5;
+  static final byte NET_TASK_CAT_VERSION = 1;
+  static final byte NET_TASK_DO_UPDATE = 2;
 
   String appVersion = "0.10";
 
@@ -77,20 +79,15 @@ public class MainActivity extends AppCompatActivity {
     MainActivity.this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
   }
 
-  @SuppressWarnings("deprecation")
   private void lockOrientation() {
     Display display = MainActivity.this.getWindowManager().getDefaultDisplay();
     int rotation = display.getRotation();
     int height, width;
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB_MR2) {
-      height = display.getHeight();
-      width = display.getWidth();
-    } else {
-      Point size = new Point();
-      display.getSize(size);
-      height = size.y;
-      width = size.x;
-    }
+    Point size = new Point();
+    display.getSize(size);
+    height = size.y;
+    width = size.x;
+
     if (rotation == Surface.ROTATION_90) {
       if (width > height)
         MainActivity.this.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
@@ -107,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
     }
   }
 
+  @SuppressWarnings("ResultOfMethodCallIgnored")
   protected void initialiseFiles() {
     try {
       db.save(this);
@@ -122,24 +120,28 @@ public class MainActivity extends AppCompatActivity {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-    SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+    //SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+    ActionBar ab = getSupportActionBar();
+    if (ab!=null) {
+      Context mainContext = ab.getThemedContext();
+      if (mainContext != null) {
+        LayoutInflater inflater = (LayoutInflater) mainContext.getSystemService(LAYOUT_INFLATER_SERVICE);
+        @SuppressLint("InflateParams") View customActionBarView = inflater.inflate(R.layout.actionbar_custom, null);
+        ActionBar actionBar = getSupportActionBar();
+        actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM, ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME | ActionBar.DISPLAY_SHOW_TITLE);
+        actionBar.setCustomView(customActionBarView, new ActionBar.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        actionBar.setTitle("");
+        actionBar.setBackgroundDrawable(new ColorDrawable(Color.WHITE));
+      }
+    }
 
-    LayoutInflater inflater = (LayoutInflater) getSupportActionBar().getThemedContext().getSystemService(LAYOUT_INFLATER_SERVICE);
-    View customActionBarView = inflater.inflate(R.layout.actionbar_custom, null);
-
-    ActionBar actionBar = getSupportActionBar();
-    actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM, ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME | ActionBar.DISPLAY_SHOW_TITLE);
-    actionBar.setCustomView(customActionBarView, new ActionBar.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-    actionBar.setTitle("");
-    actionBar.setBackgroundDrawable(new ColorDrawable(Color.WHITE));
-
-    ImageView iv = (ImageView) findViewById(R.id.searchButton);
+    ImageView iv = findViewById(R.id.searchButton);
     iv.setOnClickListener(searchButtonListener);
 
-    iv = (ImageView) findViewById(R.id.resetSearch);
+    iv = findViewById(R.id.resetSearch);
     iv.setOnClickListener(resetButtonListener);
 
-    iv = (ImageView) findViewById(R.id.sortButton);
+    iv = findViewById(R.id.sortButton);
     iv.setOnClickListener(sortButtonListener);
 
     // Check for first ever use.
@@ -154,18 +156,23 @@ public class MainActivity extends AppCompatActivity {
   void applySearch(String search) {
     search=search.toUpperCase();
     search=search.replaceAll("[^A-Z]","");
-    final TableLayout tl = (TableLayout) findViewById(R.id.thetable);
+    final TableLayout tl = findViewById(R.id.thetable);
     for (int i=rowOfficeNo.size()-1; i>=0; i--) {
-      int index = db.officeToIndex.get(rowOfficeNo.get(i));
-      String text = db.song_data.get(index).split("\t")[BFreeDB.TEXT];
-      if (!text.contains(search)) {
-        rowOfficeNo.remove(i);
-        tl.removeViewAt(i);
-        search_did_something=true;
+      String row_entry = rowOfficeNo.get(i);
+      if (row_entry!=null) {
+        Integer index = db.officeToIndex.get(row_entry);
+        if (index!=null) {
+          String text = db.song_data.get(index).split("\t")[BFreeDB.TEXT];
+          if (!text.contains(search)) {
+            rowOfficeNo.remove(i);
+            tl.removeViewAt(i);
+            search_did_something = true;
+          }
+        }
       }
     }
     if (search_did_something) {
-      ImageView v = (ImageView) findViewById(R.id.resetSearch);
+      ImageView v = findViewById(R.id.resetSearch);
       v.setImageResource(R.drawable.reset_search);
       boolean landscape = areWeLandscape();
       int mainlabel=0;
@@ -190,28 +197,23 @@ public class MainActivity extends AppCompatActivity {
   boolean areWeLandscape() {
     Display display = MainActivity.this.getWindowManager().getDefaultDisplay();
     int height, width;
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB_MR2) {
-      height = display.getHeight();
-      width = display.getWidth();
-    } else {
-      Point size = new Point();
-      display.getSize(size);
-      height = size.y;
-      width = size.x;
-    }
-    return (width>height);
+    Point size = new Point();
+    display.getSize(size);
+    height = size.y;
+    width = size.x;
+    return (width > height);
   }
 
   void addToTable(String[] bits,boolean landscape, int i, TableLayout tl) {
     int no_links = Integer.parseInt(bits[BFreeDB.NO_LINKS]);
-    boolean web=false;
-    boolean guitar=false;
-    boolean sheet=false;
-    for (int j=0; j<no_links; j++) {
-      String type = bits[BFreeDB.NO_LINKS+1+(j*2)];
-      if (type.equals("Chords")) guitar=true;
-      else if (type.equals("Sheet")) sheet=true;
-      else if (type.equals("MP3")) web=true;
+    boolean web = false;
+    boolean guitar = false;
+    boolean sheet = false;
+    for (int j = 0; j < no_links; j++) {
+      String type = bits[BFreeDB.NO_LINKS + 1 + (j * 2)];
+      guitar = guitar || type.equals("Chords");
+      sheet = sheet || type.equals("Sheet");
+      web = web || type.equals("MP3");
     }
     TableRow tr = new TableRow(this);
     tr.setLayoutParams(new TableLayout.LayoutParams(TableLayout.LayoutParams.MATCH_PARENT, TableLayout.LayoutParams.WRAP_CONTENT));
@@ -285,12 +287,11 @@ public class MainActivity extends AppCompatActivity {
 
   void resetTable() {
     rowOfficeNo.clear();
-    final TableLayout tl = (TableLayout) findViewById(R.id.thetable);
-    ImageView v = (ImageView) findViewById(R.id.resetSearch);
+    final TableLayout tl = findViewById(R.id.thetable);
+    ImageView v = findViewById(R.id.resetSearch);
     v.setImageResource(R.drawable.reset_search_grey);
     tl.removeAllViews();
     int no_songs = db.song_data.size();
-    boolean web,guitar,sheet;
     boolean landscape = areWeLandscape();
     for (int i = 0; i < no_songs; i++) {
       String[] bits = db.song_data.get(i).split("\t");
@@ -298,15 +299,13 @@ public class MainActivity extends AppCompatActivity {
     }
   }
 
+  private static class NetTask extends AsyncTask<String, Void, String> {
+    private WeakReference<MainActivity> activityReference;
+    byte task_type;
 
-
-  class NetTask extends AsyncTask<String, Void, String> {
-    final byte task_type;
-    static final byte CAT_VERSION = 1;
-    static final byte DO_UPDATE = 2;
-
-    public NetTask(byte type) {
+    NetTask(MainActivity context, byte type) {
       super();
+      activityReference = new WeakReference<>(context);
       task_type=type;
     }
 
@@ -332,7 +331,7 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean pingTest() {
       Runtime runtime = Runtime.getRuntime();
-      boolean ok=true;
+      boolean ok;
       try {
         Process mIpAddrProcess = runtime.exec("/system/bin/ping -w 2 -c 1 8.8.8.8");
         int mExitValue = mIpAddrProcess.waitFor();
@@ -342,75 +341,81 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void checkCatalogueVersion(URL url) {
+      MainActivity MA = activityReference.get();
+      if (MA == null || MA.isFinishing()) return;
+
       if (pingTest()) {
         Document doc = XMLFromStream(url);
         if (doc != null) {
           Element root = doc.getDocumentElement();
-          latestCatVersion = XMLHelper.getTagValue(root, "latesta");
-          latestAndroidVersion = XMLHelper.getTagValue(root, "android");
-          if (!latestAndroidVersion.equals(appVersion)) {
-            MainActivity.this.runOnUiThread(offerSoftwareUpdate);
-          } else if (!latestCatVersion.equals(db.catVersion)) {
-            MainActivity.this.runOnUiThread(offerUpdate);
+          MA.latestCatVersion = XMLHelper.getTagValue(root, "latesta");
+          MA.latestAndroidVersion = XMLHelper.getTagValue(root, "android");
+          if (!MA.latestAndroidVersion.equals(MA.appVersion)) {
+            MA.runOnUiThread(MA.offerSoftwareUpdate);
+          } else if (!MA.latestCatVersion.equals(MA.db.catVersion)) {
+            MA.runOnUiThread(MA.offerUpdate);
           }
         }
       }
     }
 
     void startUpdate() {
-      while (!db.catVersion.equals(latestCatVersion)) {
+      MainActivity MA = activityReference.get();
+      if (MA == null || MA.isFinishing()) return;
+
+      while (!MA.db.catVersion.equals(MA.latestCatVersion)) {
         URL url=null;
         try {
-          url = new URL(rootWeb + "/XML/up." + db.catVersion + ".xml");
+          url = new URL(rootWeb + "/XML/up." + MA.db.catVersion + ".xml");
         } catch (Exception e) { e.printStackTrace(); }
-        MainActivity.this.setProgress("Updating", "Downloading Definition");
+        MA.setProgress("Updating", "Downloading Definition");
         Element doc = XMLFromStream(url).getDocumentElement();
         String oldversion = XMLHelper.getTagValue(doc, "fromid");
         String newversion = XMLHelper.getTagValue(doc, "toid");
-        MainActivity.this.setProgress("Updating from " + oldversion + " to " + newversion, null);
-        BFreeDB.addDownloads(download_list, download_types, doc);
+        MA.setProgress("Updating from " + oldversion + " to " + newversion, null);
+        BFreeDB.addDownloads(MA.download_list, MA.download_types, doc);
 
-        for (int i = 0; i < download_list.size(); i++) {
-          MainActivity.this.setProgress(null, "Downloading " + download_list.get(i));
+        for (int i = 0; i < MA.download_list.size(); i++) {
+          MA.setProgress(null, "Downloading " + MA.download_list.get(i));
           String dir;
-          if (download_types.get(i) == 1) dir = "Chords";
-          else if (download_types.get(i) == 2) dir = "Sheet";
+          if (MA.download_types.get(i) == 1) dir = "Chords";
+          else if (MA.download_types.get(i) == 2) dir = "Sheet";
           else dir = "";
           try {
-            downloadFile(new URL(rootWeb + "/Files/" + download_list.get(i)), new File(MainActivity.this.getFilesDir() + "/" + dir, download_list.get(i)));
+            downloadFile(new URL(rootWeb + "/Files/" + MA.download_list.get(i)),
+              new File(MA.getFilesDir() + "/" + dir, MA.download_list.get(i)));
           } catch (Exception e) {
             e.printStackTrace();
           }
         }
 
-        MainActivity.this.setProgress(null, "Updating database");
+        MA.setProgress(null, "Updating database");
         int no_tags = XMLHelper.countChildren(doc);
         for (int i=0; i<no_tags; i++) {
           Node tag = XMLHelper.getChildNo(doc,i);
           String cmd = tag.getNodeName();
-          if (cmd.equals("addsong")) db.addSongToDB(tag);
-          else if (cmd.equals("removesong")) db.removeSong(tag);
-          else if (cmd.equals("updaterecord")) db.updateSong(tag);
-          else if (cmd.equals("renameid")) db.renameID(tag);
-          else if (cmd.equals("addlink")) db.addLink(tag);
-          else if (cmd.equals("removelink")) db.removeLink(tag);
-          else if (cmd.equals("createlist")) db.createList(tag);
-          else if (cmd.equals("renamelist")) db.renameList(tag);
-          else if (cmd.equals("removelist")) db.removeList(tag);
-          else if (cmd.equals("addsongtolist")) db.addSongToList(tag);
-          else if (cmd.equals("removesongfromlist")) db.removeSongFromList(tag);
-          else if (cmd.equals("verify")) { } // Do nothing with verify. Do it all at the end.
-          else if ((cmd.equals("fromid")) || (cmd.equals("toid")) || (cmd.equals("getfile"))) { } // Do nothing
-          else System.out.println("UNRECOGNISED UPDATE COMMAND: "+cmd);
+          if (cmd.equals("addsong")) MA.db.addSongToDB(tag);
+          else if (cmd.equals("removesong")) MA.db.removeSong(tag);
+          else if (cmd.equals("updaterecord")) MA.db.updateSong(tag);
+          else if (cmd.equals("renameid")) MA.db.renameID(tag);
+          else if (cmd.equals("addlink")) MA.db.addLink(tag);
+          else if (cmd.equals("removelink")) MA.db.removeLink(tag);
+          else if (cmd.equals("createlist")) MA.db.createList(tag);
+          else if (cmd.equals("renamelist")) MA.db.renameList(tag);
+          else if (cmd.equals("removelist")) MA.db.removeList(tag);
+          else if (cmd.equals("addsongtolist")) MA.db.addSongToList(tag);
+          else if (cmd.equals("removesongfromlist")) MA.db.removeSongFromList(tag);
+          else if ((!cmd.equals("fromid")) && (!cmd.equals("toid")) && (!cmd.equals("getfile")) && (!cmd.equals("verify")))
+            System.out.println("UNRECOGNISED UPDATE COMMAND: " + cmd);
         }
 
-        db.catVersion = newversion;
-        db.save(MainActivity.this);
+        MA.db.catVersion = newversion;
+        MA.db.save(MA);
       }
-      MainActivity.this.setProgress(null, null);
-      db.load(MainActivity.this);
-      unlockOrientation();
-      MainActivity.this.runOnUiThread(tableReset);
+      MA.setProgress(null, null);
+      MA.db.load(MA);
+      MA.unlockOrientation();
+      MA.runOnUiThread(MA::resetTable);
     }
 
     private Document XMLFromStream(URL url) {
@@ -430,8 +435,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected String doInBackground(String... params) {
       try {
-        if (task_type == CAT_VERSION) checkCatalogueVersion(new URL(params[0]));
-        else if (task_type == DO_UPDATE) startUpdate();
+        if (task_type == NET_TASK_CAT_VERSION) checkCatalogueVersion(new URL(params[0]));
+        else if (task_type == NET_TASK_DO_UPDATE) startUpdate();
 
       }
       catch (Exception e) {
@@ -447,37 +452,23 @@ public class MainActivity extends AppCompatActivity {
   private final Runnable versionFetcher = new Runnable() {
     public void run() {
       if (progressDialog==null) progressDialog=new ProgressDialog(MainActivity.this);
-      new NetTask(NetTask.CAT_VERSION).execute(versionFile);
+      new NetTask(MainActivity.this, NET_TASK_CAT_VERSION).execute(versionFile);
     }
   };
 
 
-  private final Runnable tableReset = new Runnable() {
-    public void run() {
-      resetTable();
-    }
-  };
-
-  private final Runnable offerSoftwareUpdate = new Runnable() {
-    public void run() {
-      AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.this);
-      alert.setTitle("New Software!"); //Set Alert dialog title here
-      alert.setMessage("I need to update myself from version  " + appVersion + " to " + latestAndroidVersion); //Message here
-      alert.setPositiveButton("Alright then", new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int whichButton) {
-          String ff = "http://www.teapotrecords.co.uk/bfree/bfree.apk";
-          startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ff)));
-        }
-      });
-      alert.setNegativeButton("Too Busy Now", new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int whichButton) {
-          dialog.cancel();
-        }
-      }); //End of alert.setNegativeButton
-      alert.setCancelable(false);
-      AlertDialog alertDialog = alert.create();
-      alertDialog.show();
-    }
+   private final Runnable offerSoftwareUpdate = () -> {
+    AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.this);
+    alert.setTitle("New Software!"); //Set Alert dialog title here
+    alert.setMessage("I need to update myself from version  " + appVersion + " to " + latestAndroidVersion); //Message here
+    alert.setPositiveButton("Alright then", (dialog, whichButton) -> {
+      String ff = "http://www.teapotrecords.co.uk/bfree/bfree.apk";
+      startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ff)));
+    });
+    alert.setNegativeButton("Too Busy Now", (dialog, whichButton) -> dialog.cancel()); //End of alert.setNegativeButton
+    alert.setCancelable(false);
+    AlertDialog alertDialog = alert.create();
+    alertDialog.show();
   };
 
   private final Runnable offerUpdate = new Runnable() {
@@ -485,23 +476,17 @@ public class MainActivity extends AppCompatActivity {
        AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.this);
         alert.setTitle("New Songs!"); //Set Alert dialog title here
         alert.setMessage("Do you want to update from catalogue " + db.catVersion + " to " + latestCatVersion); //Message here
-        alert.setPositiveButton("Alright then", new DialogInterface.OnClickListener() {
-          public void onClick(DialogInterface dialog, int whichButton) {
-          lockOrientation();
-          progressDialog.setTitle("Contemplating");
-          progressDialog.setMessage("Preparing...");
-          progressDialog.setCancelable(false);
-          progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-          progressDialog.show();
-          new NetTask(NetTask.DO_UPDATE).execute();
-          dialog.cancel();
-        }
+        alert.setPositiveButton("Alright then", (dialog, whichButton) -> {
+        lockOrientation();
+        progressDialog.setTitle("Contemplating");
+        progressDialog.setMessage("Preparing...");
+        progressDialog.setCancelable(false);
+        progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        progressDialog.show();
+        new NetTask(MainActivity.this, NET_TASK_DO_UPDATE).execute();
+        dialog.cancel();
       }); //End of alert.setNegativeButton
-      alert.setNegativeButton("Maybe Later", new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int whichButton) {
-          dialog.cancel();
-        }
-      }); //End of alert.setNegativeButton
+      alert.setNegativeButton("Maybe Later", (dialog, whichButton) -> dialog.cancel()); //End of alert.setNegativeButton
       alert.setCancelable(false);
       AlertDialog alertDialog = alert.create();
       alertDialog.show();
@@ -511,71 +496,50 @@ public class MainActivity extends AppCompatActivity {
   void setProgress(String t, String m) {
     final String tt = t;
     final String mm = m;
-    MainActivity.this.runOnUiThread(new Runnable() {
-      public void run() {
-        if ((mm == null) && (tt == null)) {
-          progressDialog.cancel();
-        } else {
-          if (mm != null) progressDialog.setMessage(mm);
-          if (tt != null) progressDialog.setTitle(tt);
-        }
+    MainActivity.this.runOnUiThread(() -> {
+      if ((mm == null) && (tt == null)) {
+        progressDialog.cancel();
+      } else {
+        if (mm != null) progressDialog.setMessage(mm);
+        if (tt != null) progressDialog.setTitle(tt);
       }
     });
   }
 
-  private final Runnable searchResetButton = new Runnable() {
-    public void run() {
-      ImageView iv = (ImageView) MainActivity.this.findViewById(R.id.resetSearch);
-      iv.setImageResource(R.drawable.reset_search_grey);
-      resetTable();
+  private final Runnable searchResetButton = () -> {
+    ImageView iv = MainActivity.this.findViewById(R.id.resetSearch);
+    iv.setImageResource(R.drawable.reset_search_grey);
+    resetTable();
+  };
+
+  private final View.OnClickListener resetButtonListener = v -> {
+    if (MainActivity.this.search_did_something) {
+      search_did_something=false;
+      MainActivity.this.runOnUiThread(searchResetButton);
     }
   };
 
-  private final View.OnClickListener resetButtonListener = new View.OnClickListener() {
-    public void onClick(View v) {
-      if (MainActivity.this.search_did_something) {
-        search_did_something=false;
-        MainActivity.this.runOnUiThread(searchResetButton);
-      }
-    }
+  private final Runnable pushSearchButton = () -> {
+    AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.this);
+    alert.setTitle("Search Song Text"); //Set Alert dialog title here
+    alert.setMessage("Search for: "); //Message here
+    final EditText input = new EditText(MainActivity.this);
+    input.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
+    input.setText("");
+    alert.setView(input);
+    // End of onClick(DialogInterface dialog, int whichButton)
+    alert.setPositiveButton("OK", (dialog, whichButton) -> {
+      final String searchText = input.getEditableText().toString();
+      MainActivity.this.runOnUiThread(() -> applySearch(searchText));
+
+    }); //End of alert.setPositiveButton
+
+    alert.setNegativeButton("CANCEL", (dialog, whichButton) -> dialog.cancel()); //End of alert.setNegativeButton
+    AlertDialog alertDialog = alert.create();
+    alertDialog.show();
   };
 
-  private final Runnable pushSearchButton = new Runnable() {
-    public void run() {
-      AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.this);
-      alert.setTitle("Search Song Text"); //Set Alert dialog title here
-      alert.setMessage("Search for: "); //Message here
-      final EditText input = new EditText(MainActivity.this);
-      input.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
-      input.setText("");
-      alert.setView(input);
-      alert.setPositiveButton("OK", new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int whichButton) {
-          final String searchText = input.getEditableText().toString();
-          MainActivity.this.runOnUiThread(new Runnable() {
-            public void run() {
-              applySearch(searchText);
-            }
-          });
-
-        } // End of onClick(DialogInterface dialog, int whichButton)
-      }); //End of alert.setPositiveButton
-
-      alert.setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int whichButton) {
-          dialog.cancel();
-        }
-      }); //End of alert.setNegativeButton
-      AlertDialog alertDialog = alert.create();
-      alertDialog.show();
-    }
-  };
-
-  private final View.OnClickListener searchButtonListener = new View.OnClickListener() {
-    public void onClick(View v) {
-      MainActivity.this.runOnUiThread(pushSearchButton);
-    }
-  };
+  private final View.OnClickListener searchButtonListener = v -> MainActivity.this.runOnUiThread(pushSearchButton);
 
   private final View.OnClickListener buttonListener = new View.OnClickListener() {
     public void onClick(View v) {
@@ -584,25 +548,33 @@ public class MainActivity extends AppCompatActivity {
       int mode=(id/100000)-1;
       String[] types = new String[] {"MP3","Sheet","Chords"};
       id=id%100000;
-
-      String[] bits = db.song_data.get(db.officeToIndex.get(rowOfficeNo.get(id))).split("\t");
-      int no_links = Integer.parseInt(bits[BFreeDB.NO_LINKS]);
-      for (int j=0; j<no_links; j++) {
-        if (bits[BFreeDB.NO_LINKS + 1 + (j * 2)].equals(types[mode])) {
-          String ff = bits[BFreeDB.NO_LINKS+2+(j*2)];
-          if (mode==0) {
-            startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(ff)));
-          } else {
-            Intent goPDF = new Intent(MainActivity.this, PDFViewer.class);
-            Bundle b = new Bundle();
-            b.putString("root", MainActivity.this.getFilesDir().getAbsolutePath());
-            b.putString("pdffile", types[mode] + "/" + ff); //Your id
-            b.putString("officeno",rowOfficeNo.get(id));
-            b.putString("filetype","_"+types[mode]);
-            goPDF.putExtras(b); //Put your id to your next Intent
-            startActivity(goPDF);
+      String row_entry = rowOfficeNo.get(id);
+      if (row_entry!=null) {
+        Integer index = db.officeToIndex.get(row_entry);
+        if (index!=null) {
+          String songdata = db.song_data.get(index);
+          if (songdata!=null) {
+            String[] bits = songdata.split("\t");
+            int no_links = Integer.parseInt(bits[BFreeDB.NO_LINKS]);
+            for (int j=0; j<no_links; j++) {
+              if (bits[BFreeDB.NO_LINKS + 1 + (j * 2)].equals(types[mode])) {
+                String ff = bits[BFreeDB.NO_LINKS + 2 + (j * 2)];
+                if (mode == 0) {
+                  startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ff)));
+                } else {
+                  Intent goPDF = new Intent(MainActivity.this, PDFViewer.class);
+                  Bundle b = new Bundle();
+                  b.putString("root", MainActivity.this.getFilesDir().getAbsolutePath());
+                  b.putString("pdffile", types[mode] + "/" + ff); //Your id
+                  b.putString("officeno", rowOfficeNo.get(id));
+                  b.putString("filetype", "_" + types[mode]);
+                  goPDF.putExtras(b); //Put your id to your next Intent
+                  startActivity(goPDF);
+                }
+                j = no_links;
+              }
+            }
           }
-          j = no_links;
         }
       }
     }
@@ -614,22 +586,13 @@ public class MainActivity extends AppCompatActivity {
       final CharSequence[] items = {"Title A->Z","Title Z->A","Author A->Z","Author Z->A","Date Oldest First","Date Youngest First"};
       AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
       builder.setTitle("Sort by:");
-      builder.setSingleChoiceItems(items, MainActivity.this.current_sort, new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int item) {
-          MainActivity.this.next_sort = (byte) item;
-        }
-      });
-      builder.setPositiveButton("Sort it", new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int whichButton) {
-          MainActivity.this.runOnUiThread(performSort);
-        }
-      });
-      builder.setNegativeButton("Leave it", new DialogInterface.OnClickListener() {
-        public void onClick(DialogInterface dialog, int whichButton) {
-          MainActivity.this.next_sort = MainActivity.this.current_sort;
-          dialog.cancel();
+      builder.setSingleChoiceItems(items, MainActivity.this.current_sort, (dialog, item) -> MainActivity.this.next_sort = (byte) item);
+      builder.setPositiveButton("Sort it", (dialog, whichButton) -> MainActivity.this.runOnUiThread(performSort));
 
-        }
+      builder.setNegativeButton("Leave it", (dialog, whichButton) -> {
+        MainActivity.this.next_sort = MainActivity.this.current_sort;
+        dialog.cancel();
+
       }); //End of alert.setNegativeButton
       AlertDialog alertDialog = builder.create();
       alertDialog.show();
@@ -637,50 +600,67 @@ public class MainActivity extends AppCompatActivity {
     }
   };
 
-  final View.OnClickListener sortButtonListener = new View.OnClickListener() {
-    public void onClick(View v) {
-      MainActivity.this.runOnUiThread(sortButtonPressed);
+  final View.OnClickListener sortButtonListener = v -> MainActivity.this.runOnUiThread(sortButtonPressed);
 
+  final void addToTable(String s, int i, boolean landscape, TableLayout tl) {
+    if (s!=null) {
+      String[] bits = s.split("\t");
+      if (bits.length>1) {
+        Integer index = db.officeToIndex.get(bits[1]);
+        if (index!=null) {
+          String songdata = db.song_data.get(index);
+          if (songdata!=null) {
+            String[] bits2 = songdata.split("\t");
+            MainActivity.this.addToTable(bits2, landscape, i, tl);
+          }
+        }
+      }
     }
-  };
+  }
 
   final Runnable performSort = new Runnable() {
     public void run() {
       String[] sort_me = new String[rowOfficeNo.size()];
       for (int i=0; i<rowOfficeNo.size(); i++) {
-        String[] s = db.song_data.get(db.officeToIndex.get(rowOfficeNo.get(i))).split("\t");
-        String title;
-        if ((next_sort==TITLE_AZ) || (next_sort==TITLE_ZA)) {
-          title = s[BFreeDB.TITLE] + s[BFreeDB.ALT_TITLE];
-          title = title.toUpperCase();
-          title = title.replaceAll("[^A-Z]", "");
-          title += "\t" + rowOfficeNo.get(i);
-        } else if ((next_sort==AUTHOR_AZ) || (next_sort==AUTHOR_ZA)) {
-          title = s[BFreeDB.AUTHOR];
-          title = title.toUpperCase();
-          title = title.replaceAll("[^A-Z]", "");
-          title += "\t" + rowOfficeNo.get(i);
-        } else { // Must be date
-          title = s[BFreeDB.COPDATE];
-          title = title.toUpperCase();
-          title += "\t" + rowOfficeNo.get(i);
+        String row_entry = rowOfficeNo.get(i);
+        if (row_entry != null) {
+          Integer index = db.officeToIndex.get(row_entry);
+          if (index!=null) {
+            String[] s = db.song_data.get(index).split("\t");
+            String title;
+            if ((next_sort == TITLE_AZ) || (next_sort == TITLE_ZA)) {
+              title = s[BFreeDB.TITLE] + s[BFreeDB.ALT_TITLE];
+              title = title.toUpperCase();
+              title = title.replaceAll("[^A-Z]", "");
+              title += "\t" + rowOfficeNo.get(i);
+            } else if ((next_sort == AUTHOR_AZ) || (next_sort == AUTHOR_ZA)) {
+              title = s[BFreeDB.AUTHOR];
+              title = title.toUpperCase();
+              title = title.replaceAll("[^A-Z]", "");
+              title += "\t" + rowOfficeNo.get(i);
+            } else { // Must be date
+              title = s[BFreeDB.COPDATE];
+              title = title.toUpperCase();
+              title += "\t" + rowOfficeNo.get(i);
+            }
+            sort_me[i] = title;
+          }
         }
-        sort_me[i]=title;
       }
       rowOfficeNo.clear();
       Arrays.sort(sort_me);
-      TableLayout tl = (TableLayout) MainActivity.this.findViewById(R.id.thetable);
+      TableLayout tl = MainActivity.this.findViewById(R.id.thetable);
       tl.removeAllViews();
       boolean landscape = MainActivity.this.areWeLandscape();
       if ((next_sort==TITLE_AZ) || (next_sort==AUTHOR_AZ) || (next_sort==COPDATE_AZ)) {
         for (int i=0; i<sort_me.length; i++) {
-          MainActivity.this.addToTable(db.song_data.get(db.officeToIndex.get(sort_me[i].split("\t")[1])).split("\t"),landscape,i,tl);
+          addToTable(sort_me[i], i, landscape, tl);
         }
 
       } else {
         int j=0;
         for (int i=sort_me.length-1; i>=0; i--) {
-          MainActivity.this.addToTable(db.song_data.get(db.officeToIndex.get(sort_me[i].split("\t")[1])).split("\t"),landscape,j,tl);
+          addToTable(sort_me[i], j, landscape, tl);
           j++;
         }
       }

@@ -1,5 +1,6 @@
 package com.teapotrecords.bfreecat;
 
+import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -31,6 +32,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
 public class PDFViewer extends AppCompatActivity {
@@ -39,13 +41,13 @@ public class PDFViewer extends AppCompatActivity {
   private int ViewSize = 0;
   private int current_page = 1;
   private int count_pages = 1;
-  private double current_zoom = 1;
-  private int current_x,current_y;
-  private ArrayList<StringBuilder> pdf_pages = new ArrayList<StringBuilder>();
+  //private double current_zoom = 1;
+  //private int current_x,current_y;
+  private ArrayList<StringBuilder> pdf_pages = new ArrayList<>();
 
   private double req_zoom;
   private int req_x,req_y,req_page;
-  private boolean saved=true;
+  //private boolean saved=true;
 
   void savePrefs(String root, String officeno, String filetype) {
     try {
@@ -55,18 +57,17 @@ public class PDFViewer extends AppCompatActivity {
       BufferedReader br = new BufferedReader(new FileReader(f));
       PrintWriter PW = new PrintWriter(new FileWriter(f2));
       String s = br.readLine();
-      String [] bits;
       boolean found=false;
       while (s!=null) {
         if (s.startsWith(officeno+"\t")) {
           found=true;
-          PW.println(officeno+"\t"+String.valueOf(req_page)+"\t"+String.valueOf(req_zoom)+"\t"+String.valueOf(req_x)+"\t"+String.valueOf(req_y));
+          PW.println(officeno+"\t"+req_page+"\t"+req_zoom+"\t"+req_x+"\t"+req_y);
         } else PW.println(s);
         s=br.readLine();
       }
       br.close();
       if (!found) {
-        PW.println(officeno+"\t"+String.valueOf(req_page)+"\t"+String.valueOf(req_zoom)+"\t"+String.valueOf(req_x)+"\t"+String.valueOf(req_y));
+        PW.println(officeno+"\t"+req_page+"\t"+req_zoom+"\t"+req_x+"\t"+req_y);
       }
       PW.close();
       f.delete();
@@ -106,7 +107,7 @@ public class PDFViewer extends AppCompatActivity {
         req_y=0;
         req_zoom=1;
       }
-      saved=true;
+      //saved=true;
 
     } catch (Exception e) { e.printStackTrace(); }
 
@@ -117,74 +118,63 @@ public class PDFViewer extends AppCompatActivity {
   protected void onCreate(Bundle savedInstanceState) {
 
     super.onCreate(savedInstanceState);
-    Bundle b = getIntent().getExtras();
-    final String root = b.getString("root");
-    final String officeno = b.getString("officeno");
-    final String filetype = b.getString("filetype");
-    File thePDF = new File(root, b.getString("pdffile"));
-    setContentView(R.layout.activity_pdfviewer);
-    LayoutInflater inflater = (LayoutInflater) getSupportActionBar().getThemedContext().getSystemService(LAYOUT_INFLATER_SERVICE);
-    View customActionBarView = inflater.inflate(R.layout.actionbarpdf_custom, null);
+
 
     /* Look up any preferences for this song */
+    Bundle b = getIntent().getExtras();
 
-    loadPrefs(root, officeno,filetype);
+    final String root = (b != null) ? b.getString("root") : null;
+    final String officeno = (b != null) ? b.getString("officeno") : null;
+    final String filetype = (b != null) ? b.getString("filetype") : null;
+    final File thePDF = (b != null) ? new File(root, b.getString("pdffile")) : null;
 
+    loadPrefs(root, officeno, filetype);
+
+    setContentView(R.layout.activity_pdfviewer);
     ActionBar actionBar = getSupportActionBar();
-    actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM, ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME | ActionBar.DISPLAY_SHOW_TITLE);
-    actionBar.setCustomView(customActionBarView, new ActionBar.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-    actionBar.setTitle("");
-    actionBar.setBackgroundDrawable(new ColorDrawable(Color.WHITE));
+    if (actionBar!=null) {
+      LayoutInflater inflater = (LayoutInflater) actionBar.getThemedContext().getSystemService(LAYOUT_INFLATER_SERVICE);
+      @SuppressLint("InflateParams") View customActionBarView = inflater.inflate(R.layout.actionbarpdf_custom, null);
 
-    //Settings
-    PDFImage.sShowImages = true; // show images
-    PDFPaint.s_doAntiAlias = true; // make text smooth
-    HardReference.sKeepCaches = true; // save images in cache
-    ImageView previous = (ImageView) findViewById(R.id.previous);
-    previous.setOnClickListener(new View.OnClickListener() {
-      public void onClick(View v) {
+
+
+      actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM, ActionBar.DISPLAY_SHOW_CUSTOM | ActionBar.DISPLAY_SHOW_HOME | ActionBar.DISPLAY_SHOW_TITLE);
+      actionBar.setCustomView(customActionBarView, new ActionBar.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      actionBar.setTitle("");
+      actionBar.setBackgroundDrawable(new ColorDrawable(Color.WHITE));
+    }
+      //Settings
+
+      PDFImage.sShowImages = true; // show images
+      PDFPaint.s_doAntiAlias = true; // make text smooth
+      HardReference.sKeepCaches = true; // save images in cache
+      ImageView previous = findViewById(R.id.previous);
+      previous.setOnClickListener(v -> {
         if (current_page > 1) {
           current_page--;
           PDFViewer.this.runOnUiThread(updatePages);
         }
-      }
-    });
+      });
 
-    ImageView next = (ImageView) findViewById(R.id.next);
-    next.setOnClickListener(new View.OnClickListener() {
-      public void onClick(View v) {
+      ImageView next = findViewById(R.id.next);
+      next.setOnClickListener(v -> {
         if (current_page < count_pages) {
           current_page++;
           PDFViewer.this.runOnUiThread(updatePages);
         }
-      }
-    });
+      });
 
-    ImageView favourite = (ImageView) findViewById(R.id.remember);
-    favourite.setOnClickListener(new View.OnClickListener() {
-      public void onClick(View v) {
-        PDFViewer.this.runOnUiThread(new Runnable() {
-          public void run() {
-            ((ImageView)findViewById(R.id.remember)).setImageResource(R.drawable.heart_grey);
-            req_page=current_page;
-            req_x = wv.getScrollX();
-            req_y = wv.getScrollY();
-            req_zoom = wv.getScale(); // Deprecated, yes I know.
-            savePrefs(root, officeno,filetype);
-          }
-        });
-      }
-    });
+      ImageView favourite = findViewById(R.id.remember);
+      favourite.setOnClickListener(v -> PDFViewer.this.runOnUiThread(() -> {
+        ((ImageView)findViewById(R.id.remember)).setImageResource(R.drawable.heart_grey);
+        req_page=current_page;
+        req_x = wv.getScrollX();
+        req_y = wv.getScrollY();
+        req_zoom = wv.getScale(); // Deprecated, yes I know.
+        savePrefs(root, officeno,filetype);
+      }));
 
-
-        //System.out.println("Zoom = "+wv.getScale());
-        //System.out.println("Scroll = "+wv.getScrollX()+","+wv.getScrollY());
-    //  }
-    //});
-
-
-
-    wv = (WebView) findViewById(R.id.theviewer);
+    wv = findViewById(R.id.theviewer);
     wv.getSettings().setBuiltInZoomControls(true);//show zoom buttons
     wv.getSettings().setSupportZoom(true);//allow zoom
     wv.getSettings().setUseWideViewPort(true);
@@ -209,47 +199,62 @@ public class PDFViewer extends AppCompatActivity {
     }
   }
 
+  private static class PDFAsyncTask extends AsyncTask<Void, Void, String> {
+    private WeakReference<PDFViewer> pdfActivityReference;
+    byte[] data;
+
+    PDFAsyncTask(PDFViewer context, byte[] _data) {
+      super();
+      data = _data;
+      pdfActivityReference = new WeakReference<>(context);
+    }
+
+    protected void onPostExecute(java.lang.String html) {
+      PDFViewer PDF = pdfActivityReference.get();
+      if (PDF == null || PDF.isFinishing()) return;
+
+      PDF.updatePages.run();
+      PDF.wv.setScrollX(PDF.req_x);
+      PDF.wv.setScrollY(PDF.req_y);
+      PDF.wv.setInitialScale((int)(100*PDF.req_zoom));
+    }
+
+    protected java.lang.String doInBackground(java.lang.Void... params) {
+      PDFViewer PDF = pdfActivityReference.get();
+      if (PDF != null && !PDF.isFinishing()) try {
+
+        ByteBuffer bb = ByteBuffer.NEW(data);
+        PDFFile pdf = new PDFFile(bb);
+        PDF.count_pages=pdf.getNumPages();
+        PDF.current_page=Math.min(PDF.req_page,PDF.count_pages);
+        while (PDF.pdf_pages.size()<PDF.count_pages) PDF.pdf_pages.add(new StringBuilder());
+        for (int i=0; i<PDF.count_pages; i++) {
+          PDF.pdf_pages.get(i).setLength(0);
+          PDFPage PDFpage = pdf.getPage(i + 1, true);
+          final float scale = PDF.ViewSize / PDFpage.getWidth() * 0.99f;
+          Bitmap page = PDFpage.getImage((int) (PDFpage.getWidth() * scale), (int) (PDFpage.getHeight() * scale), null, true, true);
+          ByteArrayOutputStream stream = new ByteArrayOutputStream();
+          page.compress(Bitmap.CompressFormat.PNG, 100, stream);
+          byte[] byteArray = stream.toByteArray();
+          stream.reset();
+          java.lang.String base64 = Base64.encodeToString(byteArray, Base64.NO_WRAP);
+          PDF.pdf_pages.get(i).append("<img src=\"data:image/png;base64,").append(base64).append("\"/><br/>");
+          stream.close();
+        }
+
+      } catch (Exception e) {
+        Log.d("error", e.toString());
+      }
+      return null;
+    }
+
+  }
+
   //Load Images:
   private void pdfLoadImages(final byte[] data) {
     try {
       // run async
-      new AsyncTask<Void, Void, String>() {
-        @Override
-        protected void onPostExecute(String html) {
-          updatePages.run();
-          wv.setScrollX(req_x);
-          wv.setScrollY(req_y);
-          wv.setInitialScale((int)(100*req_zoom));
-        }
-
-        @Override
-        protected String doInBackground(Void... params) {
-          try {
-            ByteBuffer bb = ByteBuffer.NEW(data);
-            PDFFile pdf = new PDFFile(bb);
-            count_pages=pdf.getNumPages();
-            current_page=Math.min(req_page,count_pages);
-            while (pdf_pages.size()<count_pages) pdf_pages.add(new StringBuilder());
-            for (int i=0; i<count_pages; i++) {
-              pdf_pages.get(i).setLength(0);
-              PDFPage PDFpage = pdf.getPage(i + 1, true);
-              final float scale = ViewSize / PDFpage.getWidth() * 0.99f;
-              Bitmap page = PDFpage.getImage((int) (PDFpage.getWidth() * scale), (int) (PDFpage.getHeight() * scale), null, true, true);
-              ByteArrayOutputStream stream = new ByteArrayOutputStream();
-              page.compress(Bitmap.CompressFormat.PNG, 100, stream);
-              byte[] byteArray = stream.toByteArray();
-              stream.reset();
-              String base64 = Base64.encodeToString(byteArray, Base64.NO_WRAP);
-              pdf_pages.get(i).append("<img src=\"data:image/png;base64," + base64 + "\"/><br/>");
-              stream.close();
-            }
-
-          } catch (Exception e) {
-            Log.d("error", e.toString());
-          }
-          return null;
-        }
-      }.execute();
+      new PDFAsyncTask(PDFViewer.this, data).execute();
       System.gc();// run GC
     } catch (Exception e) {
       Log.d("error", e.toString());
@@ -267,22 +272,7 @@ public class PDFViewer extends AppCompatActivity {
       html+="</body></html>";
       wv.loadDataWithBaseURL("", html, "text/html", "UTF-8", "");
       ((ImageView)findViewById(R.id.remember)).setImageResource(R.drawable.heart);
-
     }
   };
-
-
-  //View.OnTouchListener touchWebView = new View.OnTouchListener() {
-//    public boolean onTouch(View v, MotionEvent mv) {
-//      WebView w = (WebView) v;
-//      current_x=w.getScrollX();
-//      current_y=w.getScrollY();
-//      current_zoom=w.getScale();
-      //saved=((req_page==current_page) && (req_x==current_x) && (req_y==current_y) && (req_zoom==current_zoom));
-      //((ImageView)findViewById(R.id.remember)).setImageResource(saved?R.drawable.heart_grey:R.drawable.heart);
-      //System.out.println("Touch - "+w.getScrollX()+","+w.getScrollY()+","+w.getScale());
-//      return true;
-//    }
-//  };
 
 }
