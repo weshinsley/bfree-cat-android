@@ -65,21 +65,26 @@ class BFreeDB {
 
   }
 
+  private static void dealWithLink(ArrayList<String> files, ArrayList<Byte> types, Node linknode) {
+    String type = XMLHelper.getTagValue(linknode, "type");
+    byte itype = 0;
+    if (type.equals("Chords")) itype = 1;
+    else if (type.equals("Sheet")) itype = 2;
+    if (itype != 0) {
+      files.add(XMLHelper.getTagValue(linknode, "file"));
+      types.add(itype);
+    }
+  }
+
   private static void dealWithLinks(ArrayList<String> files, ArrayList<Byte> types, Node songnode) {
     Node links = XMLHelper.getTag(songnode, "links");
     int no_links = XMLHelper.countChildren(links, "link");
     for (int j = 0; j < no_links; j++) {
       Node link = XMLHelper.getChildNo(links, "link", j);
-      String type = XMLHelper.getTagValue(link, "type");
-      byte itype = 0;
-      if (type.equals("Chords")) itype = 1;
-      else if (type.equals("Sheet")) itype = 2;
-      if (itype != 0) {
-        files.add(XMLHelper.getTagValue(link, "file"));
-        types.add(itype);
-      }
+      dealWithLink(files, types, link);
     }
   }
+
   static void addDownloads(ArrayList<String> files, ArrayList<Byte> types, Element doc) {
     types.clear();
     files.clear();
@@ -105,6 +110,12 @@ class BFreeDB {
       Node songnode = XMLHelper.getTag(XMLHelper.getChildNo(doc, "updaterecord", i), "song");
       dealWithLinks(files, types, songnode);
     }
+    addsong_count = XMLHelper.countChildren(doc, "addlink");
+    for (int i = 0; i < addsong_count; i++) {
+      Node linknode = XMLHelper.getTag(XMLHelper.getChildNo(doc, "addlink", i), "link");
+      dealWithLink(files, types, linknode);
+    }
+
   }
 
   void addSongToDB(Node addsong) {
@@ -201,7 +212,13 @@ class BFreeDB {
   }
 
   void addLink(Node link) {
-    // <addlink><id>12345</id><link><type><Chords></type><file>Blah</file></addlink>
+    // <addlink>
+    //   <id>12345</id>
+    //   <link>
+    //     <type><Chords></type>
+    //     <file>Blah</file>
+    //   </link>
+    // </addlink>
     String id = XMLHelper.getTagValue(link,"id");
     Node link_to_add = XMLHelper.getTag(link, "link");
     for (int i=0; i<song_data.size(); i++) {
@@ -220,9 +237,14 @@ class BFreeDB {
           }
         }
         new_links++;
-        ss[NO_LINKS]=String.valueOf(new_links);
-        updated_entry.append(new_link_type).append("\t").append(new_link_file).append("t");
-        song_data.set(i, updated_entry.toString());
+        updated_entry.append(new_link_type).append("\t").append(new_link_file).append("\t");
+        ss = updated_entry.toString().split("\t");
+        ss[NO_LINKS] = String.valueOf(new_links);
+        StringBuilder sss = new StringBuilder();
+        for (String sk : ss) {
+          if (sk != null) sss.append(sk).append("\t");
+        }
+        song_data.set(i, sss.toString());
         break;
       }
     }
