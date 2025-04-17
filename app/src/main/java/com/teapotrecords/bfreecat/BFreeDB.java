@@ -162,14 +162,21 @@ class BFreeDB {
     for (int i=0; i<song_data.size(); i++) {
       if (song_data.get(i).split("\t")[OFFICE_NO].equals(id)) {
         song_data.remove(i);
-        i=song_data.size();
+        break;
       }
     }
   }
 
   void updateSong(Node update) {
     // Recreate all data - remove/add with officeno.
-    removeSong(update);
+    Node song = XMLHelper.getTag(update,"song");
+    String id = XMLHelper.getTagValue(song, "officeno");
+    for (int i=0; i<song_data.size(); i++) {
+      if (song_data.get(i).split("\t")[OFFICE_NO].equals(id)) {
+        song_data.remove(i);
+        break;
+      }
+    }
     addSongToDB(update);
   }
 
